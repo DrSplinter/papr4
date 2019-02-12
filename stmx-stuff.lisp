@@ -2,6 +2,9 @@
 ;; PRIKLADY NA SMTX
 ;; CHANGELOG:
 ;;     27. 4. 2017 - prvni verze: counter, producent-konzument, horska draha
+;;
+;;     11. 2. 2019 - typos fix
+;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -60,7 +63,7 @@
 
 (defun produce ()
   (loop
-     (put-in *buffer* 1))))
+     (put-in *buffer* 1)))
 
 (defun consume ()
   (let ((sum 1))
@@ -102,41 +105,41 @@
   (with-slots (get-in get-out load) instance
     (loop
        (customer-load)
-       (atomic 
+       (stmx:atomic 
 	(setf get-in t))
        
-       (atomic
+       (stmx:atomic
 	(when (not run)
-	  (retry))
+	  (stmx:retry))
 	(setf run nil))
 
        (run)
        (sleep 2)
-       (atomic
+       (stmx:atomic
 	(setf get-out t))
        
        (unload)
-       (atomic
+       (stmx:atomic
 	(when (not load)
-	  (retry))
+	  (stmx:retry))
 	(setf load nil)))))
 
 
 (defun customer-run (instance index)
-  (with-slots (get-in get-out instide run load capacity) instance
+  (with-slots (get-in get-out inside run load capacity) instance
     (loop
-       (atomic
+       (stmx:atomic
 	(when (not get-in)
-	  (retry))
+	  (stmx:retry))
 	(incf inside)
 	(when (= inside capacity)
 	  (setf get-in nil)))
        
        (board)
        
-       (atomic
+       (stmx:atomic
 	(when (not get-out)
-	  (retry))
+	  (stmx:retry))
 	(decf inside)
 	(when (= inside 0)
 	  (setf get-out nil)))

@@ -14,13 +14,10 @@
 ;; 
 ;;  29.3. reimplementace mutexu, aby je nevlastnila vlakna, upraven kod z bt-semaphore
 ;;        pridana implementace jednoduche pocitaci bariery (make-barrier, barrier-wait)
+;;
+;;  11.2. 2019 odebrano nahrani knihoven pomoci ql:quickload a vytvoreni projectu
+;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; nahrani knihoven
-(ql:quickload "bordeaux-threads")
-(ql:quickload "bt-semaphore")
-(ql:quickload "stmx")
-
 	
 ;; aprogn (asynchronni progn)
 ;; syntax: (a-progn
@@ -33,10 +30,10 @@
 
 (defmacro wrap-form (form)
   (let ((so (gensym)))
-  `(let ((,so *standard-output*))
-     (lambda ()
-       (let ((*standard-output* ,so))
-	 ,form)))))
+    `(let ((,so *standard-output*))
+       (lambda ()
+         (let ((*standard-output* ,so))
+	   ,form)))))
 
 (defmacro a-progn (&body body)
   (let ((ret (list 'let))
