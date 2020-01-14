@@ -7,9 +7,6 @@
   :version "1.0"
   :description "Implementation of paralel primitives for solving tasks
   in course KMI/PARA at UPOL\."
-  :long-description
-  #.(uiop:read-file-string
-     (uiop:subpathname *load-pathname* "README.md"))
   :class :package-inferred-system
   :depends-on (:papr4/user
 	       :papr4/blocking-stack)
