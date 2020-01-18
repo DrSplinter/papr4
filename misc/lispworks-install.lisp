@@ -43,11 +43,11 @@
   (if (or (stringp (pathname-name path))
 	  (stringp (pathname-type path)))
       (delete-file path)
-      (dolist (f (directory-files path) (delete-directory path))
+      (dolist (f (directory-files path) (lw:delete-directory path))
 	(delete-file* f))))
 
 ;; upgrade to ASDF 3.3
-(let ((cache (merge-pathnames "cache" *ql-path*))
+(let ((cache (merge-pathnames "cache/" *ql-path*))
       (target-asdf (merge-pathnames "asdf.lisp" *ql-path*))
       (target-setup (merge-pathnames "setup.lisp" *ql-path*))
       (source-asdf (merge-pathnames "misc/asdf.lisp" *path*))
