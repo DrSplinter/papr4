@@ -1690,12 +1690,8 @@ the indexes in the header accordingly."
         (asdf (qmerge "asdf.lisp")))
     (renaming-fetch (client-tar-url client-info) tmptar)
     (unpack-tarball tmptar :directory (qmerge "./"))
-    (renaming-fetch "https://raw.githubusercontent.com/quicklisp/quicklisp-client/asdf3/setup.lisp"
-		    ;;(setup-url client-info)
-		    setup)
-    (renaming-fetch "http://common-lisp.net/project/asdf/asdf.lisp"
-		    ;;(asdf-url client-info)
-		    asdf)
+    (renaming-fetch (setup-url client-info) setup)
+    (renaming-fetch (asdf-url client-info) asdf)
     (rename-file (source-file client-info) (qmerge "client-info.sexp"))
     (load setup :verbose nil :print nil)
     (write-string *after-initial-setup-message*)
