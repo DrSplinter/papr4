@@ -3,12 +3,10 @@
   (:export :cleanup))
 (in-package #:lispworks-install)
 
-(defparameter *path* 
-  (multiple-value-bind (directory successp)
-      (capi:prompt-for-directory "Please enter papr4 directory:")
-    (if successp
-	directory
-	(error "Error while trying to install papr4 library."))))
+(defparameter *path*
+  (make-pathname :directory (butlast (pathname-directory *load-pathname*))
+		 :type nil
+		 :name nil))
 (defparameter *ql-path* (merge-pathnames "quicklisp/" *path*))
 (defparameter *papr4-path* (merge-pathnames "local-projects/papr4" *ql-path*))
 
@@ -56,8 +54,7 @@
   (delete-file target-asdf)
   (delete-file target-setup)
   (rename-file source-asdf target-asdf)
-  (rename-file source-setup target-setup)
-  (load target-setup))
+  (rename-file source-setup target-setup))
 
 ;; create loading file
 (let ((load-file (merge-pathnames "lispworks-load.lisp" *path*)))
@@ -65,24 +62,33 @@
 		     :direction :output
 		     :if-does-not-exist :create
 		     :if-exists :supersede)
+    (print `(let ((misc ,(merge-pathnames "misc/" *path*)))
+	      (when (probe-file misc)
+		(labels ((directory-files (path)
+			   (directory (make-pathname :defaults path
+						     :type :wild
+						     :name :wild)))
+			 (delete-file* (path)
+			   (if (or (stringp (pathname-name path))
+				   (stringp (pathname-type path)))
+			       (delete-file path)
+			       (dolist (f (directory-files path)
+					(lw:delete-directory path))
+				 (delete-file* f)))))
+		  (delete-file* misc))))
+	   f)
     (print `(load ,(merge-pathnames "setup.lisp" *ql-path*)) f)
-    (print '(ql:quickload :papr4) f))
+    (print '(ql:quickload :papr4)) f)
   load-file)
 
-(defun cleanup ()
-  (delete-directory (merge-pathnames "misc/" *path*) :recursive t))
-
-
 (format t "
-================ papr4 lispworks install complete ==============
+============ papr4 lispworks installation complete =============
 
- To finish installation, evaluate:  (lispworks-install:cleanup)
+ Now everytime you want to work with papr4 functionality, 
+ evaluate the following two expressions:
 
-----------------------------------------------------------------
-
- Now everytime you want to work with papr4 functionality load
-    ~A
- and then evaluate (in-package :papr4).
+   (load ~S)
+   (in-package :papr4-user)
 
 ================================================================
 " (merge-pathnames "lispworks-load.lisp" *path*))
