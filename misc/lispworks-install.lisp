@@ -4,7 +4,8 @@
 (in-package #:lispworks-install)
 
 (defparameter *path*
-  (make-pathname :directory (butlast (pathname-directory *load-pathname*))
+  (make-pathname :defaults *load-pathname*
+		 :directory (butlast (pathname-directory *load-pathname*))
 		 :type nil
 		 :name nil))
 (defparameter *ql-path* (merge-pathnames "quicklisp/" *path*))
@@ -78,17 +79,23 @@
 		  (delete-file* misc))))
 	   f)
     (print `(load ,(merge-pathnames "setup.lisp" *ql-path*)) f)
-    (print '(ql:quickload :papr4)) f)
+    (print '(if (member :asdf3.3 *features*)
+	     (ql:quickload :papr4)
+	     (error "You have old version of ASDF. 
+Please restart LispWorks."))
+	   f))
   load-file)
 
 (format t "
-============ papr4 lispworks installation complete =============
+=============================================================
 
- Now everytime you want to work with papr4 functionality, 
+ To finish installation restart LispWorks.
+
+ Everytime you want to work with papr4 functionality, 
  evaluate the following two expressions:
 
    (load ~S)
    (in-package :papr4-user)
 
-================================================================
+=============================================================
 " (merge-pathnames "lispworks-load.lisp" *path*))
