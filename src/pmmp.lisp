@@ -100,7 +100,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defpackage #:papr4/pmmp
-  (:use :cl)
+  (:use :cl :papr4/semaphore)
   (:import-from :closer-mop)
   (:export :init-pmmp
 	   :run-pmmp
@@ -131,7 +131,7 @@
 (defmethod initialize-instance :after ((m message-envelope) &key)
   (with-slots (style sync-semaphore) m
     (when (member 'sync style)
-      (setf sync-semaphore (make-semaphore 0)))))
+      (setf sync-semaphore (semaphore 0)))))
 
 (defun forbidden-styles (style-list)
   (intersection style-list '(broadcast-forward
@@ -222,55 +222,55 @@
 
 
 (defclass mailbox()
-  ((lock :initform (make-mutex 1))
+  ((lock :initform (semaphore 1))
    (message-queue :initform (make-instance 'queue-list))
-   (receive-semaphore :initform (make-semaphore 0))
+   (receive-semaphore :initform (semaphore 0))
    (waiting-flags :initform nil)))
 	    
 (defmethod push-to-mailbox ((box mailbox) (message message-envelope))
   (with-slots (lock message-queue receive-semaphore waiting-flags) box
     (with-slots (sender style sync-semaphore message-type) message
-      (mutex-wait lock)
+      (wait-on-semaphore lock)
       (enqueue message message-queue)
       (let ((blocking (member 'sync style))) 
 	(if waiting-flags
 	    (progn
-	      (sem-signal receive-semaphore)
+	      (signal-semaphore receive-semaphore)
 	      (when blocking
-		(sem-wait sync-semaphore)))
+		(wait-on-semaphore sync-semaphore)))
 	    (progn
-	      (mutex-signal lock)
+	      (signal-semaphore lock)
 	      (when blocking
-		(sem-wait sync-semaphore))))))))
+		(wait-on-semaphore sync-semaphore))))))))
 
 (defmethod pop-from-mailbox((box mailbox) &key senders type style-arg)
   (with-slots (lock message-queue receive-semaphore waiting-flags) box
     (let (ret)
-      (mutex-wait lock)
+      (wait-semaphore lock)
       (setf ret (dequeue-if (lambda (x) (message-match x senders type style-arg))
 			    message-queue))
       (loop
 	 while (not ret) do
 	   (setf waiting-flags t)
-	   (mutex-signal lock)
-	   (sem-wait receive-semaphore)
+	   (signal-semaphore lock)
+	   (wait-on-semaphore receive-semaphore)
 	   (setf ret (dequeue-if (lambda (x) (message-match x senders type style-arg))
 				 message-queue)))
       (setf waiting-flags nil)
       
       (with-slots (style sync-semaphore) ret
 	(when (member 'sync style)
-	  (sem-signal sync-semaphore)))
-      (mutex-signal lock)
+	  (signal-semaphore sync-semaphore)))
+      (signal-semaphore lock)
       ret)))
 
 (defmethod probe-mailbox ((box mailbox) &key senders type)
   (with-slots (lock message-queue) box
     (let ((ret nil))
-      (mutex-wait lock)
+      (wait-on-semaphore lock)
       (setf ret
 	    (queue-find message-queue (lambda (x) (message-match x senders type))))
-      (mutex-signal lock)
+      (signal-semaphore lock)
       ret)))
     
 
