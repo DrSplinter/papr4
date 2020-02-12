@@ -72,55 +72,62 @@
 (defmethod thread-finished-p ((thread thread))
   (eql (thread-status thread) :finished))
 
-;; TODO
-;; asi dat tyhle globaly nejak do metaclassy tridy thread
-;; nebo vytvorit thread pool
+(defclass thread-pool ()
+  ((lock
+    :initform (bt:make-lock "thread-pool")
+    :documentation "Lock for exclusive access to list of threads.")
+   (list
+    :initform nil
+    :type list
+    :documentation "List of all running threads in pool."))
+  (:documentation "Container for running threads."))
 
-(defvar *all-threads* nil
-  "List of all running user defined threads.")
+(defvar *global-thread-pool* (make-instance 'thread-pool)
+  "Global thread pool for monitoring all instances of thread.")
 
-(defvar *global-lock* (bt:make-lock "global")
-  "Global lock for synchronized access to *ALL-THREADS*.")
-
-(defun push-thread (thread)
-  "Register running THREAD."
-  (bt:with-lock-held (*global-lock*)
-    (push thread *all-threads*))
+(defun add-thread (thread &optional (pool *global-thread-pool*))
+  "Register running THREAD to POOL."
+  (bt:with-lock-held ((slot-value pool 'lock))
+    (push thread (slot-value pool 'list)))
   thread)
 
-(defun pop-thread (thread)
-  "Unregister running THREAD."
-  (bt:with-lock-held (*global-lock*)
-    (setf *all-threads* (remove thread *all-threads*)))
+(defun rem-thread (thread &optional (pool *global-thread-pool*))
+  "Unregister running THREAD from POOL."
+  (bt:with-lock-held ((slot-value pool 'lock))
+    (setf (slot-value pool 'list)
+	  (delete thread (slot-value pool 'list))))
   thread)
 
-(defun current-thread ()
-  "Get instance of current running thread."
-  (find (bt:current-thread) *all-threads*
+(defun current-thread (&optional (pool *global-thread-pool*))
+  "Get instance of current running thread registered in POOL."
+  (find (bt:current-thread) (slot-value pool 'list)
 	:key (lambda (x) (slot-value x 'executor))))
 
-(defmethod start-thread ((thread thread))
-  "Run THREADs function."
-  (push-thread thread)
+(defmethod start-thread ((thread thread) &optional (pool *global-thread-pool*))
+  "Run THREADs function in POOL."
+  (push-thread thread pool)
   (with-slots (function name executor) thread
     (let ((fn (lambda ()
 		(unwind-protect (funcall function)
-		  (pop-thread thread)))))
-      (setf executor (bt:make-thread fn :name name))))
+		  (pop-thread thread pool)))))
+      (setf executor
+	    (bt:make-thread fn :name name
+			    :initial-bindings
+			    `((*standard-output* . ,*standard-output*))))))
   thread)
 
 (defmethod join-thread ((thread thread))
-  "Get return value of thread. If value is not yet available block
+  "Get return value of THREAD. If value is not yet available block
 current thread."
   (bt:join-thread (slot-value thread 'executor)))
 
-(defun all-threads ()
-  "Get list of all running threads."
-  (copy-list *all-threads*))
+(defun all-threads (&optional (pool *global-thread-pool*))
+  "Get list of all running threads in POOL."
+  (copy-list (slot-value pool 'list)))
 
-(defun kill-all-threads ()
-  "Kill all running threads. This function is for debugging purpose
-only."
+(defun kill-all-threads (&optional (pool *global-thread-pool*))
+  "Kill all running threads in POOL. This function is for debugging
+purpose only."
   (warn "Dangerous operation which can lead to inconsistent state. Use
   this with caution.")
   (loop :for thread :in *all-threads*
