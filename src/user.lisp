@@ -48,14 +48,14 @@
 	:when rest :do (join-thread thread)
 	:unless rest :return (join-thread thread))))
 
-(defmacro pdotimes ((var count result) &body forms)
+(defmacro pdotimes ((var count &optional result) &body forms)
   `(progn
      (map nil #'join-thread
 	  (loop :for ,var :from 0 :below ,count
 	     :collect (let ((,var ,var)) (thread ,@forms))))
      ,result))
 
-(defmacro pdolist ((var list result) &body forms)
+(defmacro pdolist ((var list &optional result) &body forms)
   `(progn
      (map nil #'join-thread
 	  (loop :for ,var :in ,list
