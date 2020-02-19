@@ -105,11 +105,11 @@
 
 (defmethod start-thread ((thread thread) &optional (pool *global-thread-pool*))
   "Run THREADs function in POOL."
-  (push-thread thread pool)
   (with-slots (function name executor) thread
     (let ((fn (lambda ()
+		(add-thread thread pool)
 		(unwind-protect (funcall function)
-		  (pop-thread thread pool)))))
+		  (rem-thread thread pool)))))
       (setf executor
 	    (bt:make-thread fn :name name
 			    :initial-bindings
