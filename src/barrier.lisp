@@ -25,23 +25,26 @@
     :initarg :threads)
    (count
     :initform 0)
-   (arrival
+   (mutex
     :initform (semaphore 1))
-   (departure
+   (arrival-turnstile
+    :initform (semaphore 1))
+   (departure-turnstile
     :initform (semaphore 0))))
 
 (defmethod wait-on-barrier ((barrier counting-barrier) &key)
   (with-slots (n count arrival departure) barrier
-    (wait-on-semaphore arrival)
-    (incf count)
-    (if (= count n)
-	(signal-semaphore departure)
-	(signal-semaphore arrival))
-    (wait-on-semaphore departure)
-    (decf count)
-    (if (> count 0)
-	(signal-semaphore departure)
-	(signal-semaphore arrival))))
+    (critical-section mutex
+      (incf count)
+      (when (= count n)
+        (signal-semaphore arrival-turnstile n)))
+    (wait-on-semaphore arrival-turnstile)
+    
+    (critical-section mutex
+      (decf count)
+      (when (= count 0)
+        (signal-semaphore departure-turnstile n)))
+    (wait-on-semaphore departure-turnstile)))
 
 (defun counting-barrier (n)
   (make-instance 'counting-barrier :threads n))
