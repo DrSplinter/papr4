@@ -21,7 +21,8 @@
 		:define-monitor-method
 		:condition-variable
 		:wait-on-condition
-		:signal-condition)
+		:signal-condition
+		:broadcast-condition)
   (:import-from :papr4/transactional-memory
 		:transactional
 		:atomic

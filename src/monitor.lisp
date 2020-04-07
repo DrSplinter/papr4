@@ -10,7 +10,8 @@
 	   :define-monitor-method
 	   :condition-variable
 	   :wait-on-condition
-	   :signal-condition)
+	   :signal-condition
+	   :broadcast-condition)
   (:documentation
    "Fundamentals for monitor synchronization.
 
@@ -65,9 +66,9 @@ Example:
 
 (defclass monitor ()
   ((lock
-    :initform (bt:make-lock)
+    :initform (bt:make-recursive-lock)
     :type bt:lock
-    :documentation "Lock for exclusive access to monitor."))
+    :documentation "Reentrant lock for exclusive access to monitor."))
   (:documentation "Class implementing lockable objects."))
 
 (defmethod enter-monitor ((monitor monitor))
@@ -81,7 +82,13 @@ Example:
 (defclass condition-variable ()
   ((condition-variable
     :initform (bt:make-condition-variable)
-    :documentation "Low level condition variable."))
+    :documentation "Low level condition variable.")
+   (lock
+    :initform (bt:make-lock)
+    :documentation "Lock for exclusive access to counter.")
+   (counter
+    :initform 0
+    :documentation "The number of waiting threads."))
   (:documentation "Class implementing condition variable of monitor."))
 
 (defun condition-variable ()
@@ -91,13 +98,26 @@ Example:
 (defmethod wait-on-condition ((condvar condition-variable) (monitor monitor))
   "Queues current thread on CONDVAR of MONITOR and blocks until
 CONDVAR is signaled."
-  (bt:condition-wait (slot-value condvar 'condition-variable)
-                     (slot-value monitor 'lock)))
+  (with-slots (condition-variable counter lock) condvar
+    (bt:with-lock-held (lock)
+      (incf counter)
+      (bt:condition-wait condition-variable
+			 (slot-value monitor 'lock)))))
 
-(defmethod signal-condition ((condvar condition-variable) &optional (n 1))
-  "Release N threads waiting on CONDVAR."
-  (loop :repeat n
-     :do (bt:condition-notify (slot-value condvar 'condition-variable))))
+(defmethod signal-condition ((condvar condition-variable))
+  "Release a thread waiting on CONDVAR."
+  (with-slots (condition-variable counter lock) condvar
+    (bt:with-lock-held (lock)
+      (setf (max 0 (1- counter)))
+      (bt:condition-notify condition-variable))))
+
+(defmethod broadcast-condition ((condvar condition-variable))
+  "Release all threads waiting on CONDVAR."
+  (with-slots (condition-variable counter lock) condvar
+    (bt:with-lock-held (lock)
+      (let ((n counter))
+	(setf counter 0)
+	(loop :repeat n :do (bt:condition-notify condition-variable))))))
 
 (defmacro with-locked (object &body forms)
   "Macro for safe exclusive access to OBJECT and shadowing method
