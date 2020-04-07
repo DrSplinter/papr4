@@ -108,7 +108,7 @@ CONDVAR is signaled."
   "Release a thread waiting on CONDVAR."
   (with-slots (condition-variable counter lock) condvar
     (bt:with-lock-held (lock)
-      (setf (max 0 (1- counter)))
+      (setf counter (max 0 (1- counter)))
       (bt:condition-notify condition-variable))))
 
 (defmethod broadcast-condition ((condvar condition-variable))
