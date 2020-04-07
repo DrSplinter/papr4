@@ -1,0 +1,242 @@
+\documentclass {article}
+\usepackage[czech]{babel}
+\usepackage[utf8]{inputenc}
+
+\usepackage[backend=bibtex,style=ieee]{biblatex}
+\bibliography{papr4} 
+
+\usepackage{amsthm}
+\usepackage{amsmath}
+
+\theoremstyle {definition}
+\newtheorem{example}{Příklad}
+\newtheorem{exercise}{Cvičení}
+\newtheorem*{remark}{Poznámka}
+
+\usepackage{hyperref}
+
+\begin {document}
+\section {Monitor}
+Monitor je objekt, který zabaluje data a procedury (tak, jak to známe
+z OOP), ale navíc také synchronizaci. Metody monitoru jsou všechny
+synchronizované, tedy pouze jedno vlákno může zaráz vykonávat
+libovolnou metodu monitoru. Navíc monitor může obsahovat podmínky, ke
+kterým se dostaneme.
+
+\begin {example}
+Jednoduchým příkladem je synchronizovaný čítač. V naší knihovně bychom
+podědili třídu \texttt{MONITOR}.
+
+\begin{verbatim}
+(defclass counter (monitor)
+  ((count :initform 0)))
+\end{verbatim}
+
+Inkrementaci pak definujeme makrem \texttt{DEFINE-MONITOR-METHOD}.
+
+\begin{verbatim}
+(define-monitor-method increment ((counter counter))
+  (incf (slot-value counter 'count)))
+\end{verbatim}
+
+Je důležité, aby třída, která dědí z monitoru byla uvedena jako první
+argument.
+\end {example}
+
+Monitor si můžeme představit tak, že obsahuje mutex, na který se čeká
+na začátku každé metody a na konci každé metody se
+signalizuje. Nicméně pokud je potřeba v rámci metody počkat než bude
+splněna nějaká podmínka, můžeme monitoru přiřadit takzvanou podmíněnou
+proměnnou, na kterou lze čekat, což uspí vlákno a signalizuje mutex,
+aby ostatní vlákna měly možnost podmínku splnit. Splnění podmínky je
+pak potřeba signalizovat.
+
+\begin {remark}
+  Je dobré podotknout, že mutex, bežně nazývaný také zámek, musí být
+  takzvaně reentrantní, nebo-li aby jedno vlákno mohlo vícekrát
+  signalizovat tento mutex. Pokud by reentrantní nebyl, nastal by
+  deadlock, a to v případě, že v rámci jedné metody monitoru je zavolána jiná
+  metoda monitoru.
+\end {remark}
+
+\begin {example}
+  Pokud bychom chtěli, aby čítač šlo také dekrementovat, ale pouze
+  pokud je hodnota kladná, přidáme podmíněnou proměnnou.
+
+\begin{verbatim}
+(defclass counter (monitor)
+  ((count :initform 0)
+   (positivep :initform (condition-variable))))
+\end{verbatim}
+
+Samotná dekrementace pak podmíněnou proměnnou využívá.
+
+\begin{verbatim}
+(define-monitor-method decrement ((counter counter))
+  (with-slots (count positivep) counter
+    (loop :until (plusp count)
+       :do (wait-on-condition positivep))
+    (decf count)))
+\end{verbatim}
+
+Inkrementace pak musí signalizovat, že hodnota už je znovu kladná.
+
+\begin{verbatim}
+(define-monitor-method increment ((counter counter))
+  (incf (slot-value counter 'count))
+  (signal-condition (slot-value counter 'positivep)))
+\end{verbatim}
+\end {example}
+
+Podmíněné proměnné, které používáme jsou neblokující, což znamená, že
+vlákno, které signalizuje proměnnou není blokováno a dokončí svou
+práci. To má ale za následek, že je potřeba po každém čekání
+zkontrolovat, jestli už je podmínka splněna.
+
+\begin {remark}
+  Existují ještě další typy podmíněných proměnných. Jednou z nich je
+  blokující, která blokuje vlákno, které signalizuje proměnnou. Tento
+  typ byl prvním návrhem \cite{hoare74,hansen72}. Druhou pak je
+  implicitní, která nespecifikuje podmíněné proměnné, ale je obsažena
+  jedna implicitní podmínka pro jeden monitor. Pak tedy není potřeba
+  žádnou vytvářet, pouze se čeká na a signalizuje samotný
+  monitor. Tento typ je například použit v Javě, kde metody monitoru
+  jsou označeny klíčovým slovem \texttt {synchronized} a pro
+  podmíněnou proměnnou používáme \texttt {wait} a
+  \texttt{notify}/\texttt {notifyAll}.
+
+  Neblokující podmíněné proměnné se používají např. v Pthread nebo
+  také ve většině implementací CL. Lze je také najít v knihovně
+  \texttt {java.util.concurrent.locks}.
+
+  Schematické obrázky vysvětlující princip fungování jednotlivých typů
+  lze najít na
+  \href{https://en.wikipedia.org/wiki/Monitor_(synchronization)#Blocking_condition_variables}{wikipedii}.
+\end {remark}
+
+\subsection {Producent-konzument}
+Řešením tohoto problému je v podstatě vytvoření sdílené blokující
+fronty, která bude mít metody \texttt{enqueue} a
+\texttt{dequeue}. Použijeme podobnou terminologii a řešení jako při
+použití semaforů.
+
+\begin{verbatim}
+(defclass queue (monitor)
+  ((itemsp :initform (make-instance 'condition-variable))
+   (spacep :initform (make-instance 'condition-variable))
+   (buffer :initform nil)
+   (capacity :initform 1 :initarg :capacity)))
+(defun queue (capacity)
+  (make-instance 'queue :capacity capacity))
+\end{verbatim}
+
+Podmíněná proměnná \texttt {itemsp} značí konzumentům, že existuje
+nějaký prvek v bufferu a naproti tomu \texttt {spacep} značí
+producentům, že je místo v bufferu.
+
+\begin{verbatim}
+(define-monitor-method enqueue ((queue queue) value)
+  (with-slots (buffer capacity spacep itemp) queue
+    (loop :while (= (length buffer) capacity)
+          :do (wait-on-condition spacep))
+    (setf buffer `(,@buffer ,value))
+    (signal-condition itemp))
+  t)
+                 
+(define-monitor-method dequeue ((queue queue))
+  (with-slots (buffer capacity spacep itemp) queue
+    (loop :while (null buffer)
+          :do (wait-on-condition itemp))
+    (let ((value (pop buffer)))
+      (signal-condition spacep)
+      value)))
+\end{verbatim}
+
+
+\subsection {Čtenáři-písaři}
+Abychom tento problém vyřešili dostatečně obecně, vytvoříme třídu,
+která bude sloužit jako zámek do místnosti, kde budou dokumenty, které
+se budou číst a do kterých se bude zapisovat. Bude mít dvoje dveře,
+jedny pro čtenáře a jedny pro písaře, jako tomu bylo u řešení pomocí
+semaforů. Budeme mít tedy čtyři metody monitoru \texttt{reader-enter},
+\texttt{reader-leave}, \texttt{writer-enter} a \texttt{writer-enter}.
+
+\begin{verbatim}
+(defclass read-write-lock (monitor)
+  ((emptyp :initform (make-instance 'condition-variable))
+   (writerp :initform nil)
+   (readers :initform 0)))
+(defun read-write-lock ()
+  (make-instance 'read-write-lock))
+\end{verbatim}
+
+Použijeme pouze jednu podmíněnou proměnnou \texttt {emptyp}, která
+značí, že místnost je prázdná. Dále proměnná \texttt{writerp}, značí,
+že v místnosti je čtenář a proměnná \texttt{readers} bude uvádět počet
+čtenářů v místnosti.
+
+\begin{verbatim}
+(define-monitor-method reader-enter ((rw read-write-lock))
+  (with-slots (writerp readers emptyp) rw
+    (loop :while writerp
+          :do (wait-on-condition emptyp))
+    (incf readers))
+  t)
+
+(define-monitor-method reader-leave ((rw read-write-lock))
+  (with-slots (writerp readers emptyp) rw
+    (decf readers)
+    (when (zerop readers)
+      (broadcast-condition emptyp)))
+  t)
+
+(define-monitor-method writer-enter ((rw read-write-lock))
+  (with-slots (writerp readers emptyp) rw
+    (loop :while (or writerp (positivep readers))
+          :do (wait-on-condition emptyp))
+    (setf writerp t))
+  t)
+
+(define-monitor-method writer-leave ((rw read-write-lock))
+  (with-slots (writerp emptyp) rw
+    (setf writerp nil)
+    (broadcast-condition emptyp)
+  t)
+\end{verbatim}
+
+Čtenáři čekají dokud je v místnosti písař a písaři čekají dokud jsou v
+místnosti čtenáři nebo písař. Při výstupu z místnosti, poslední čtenář
+signalizuje, že nikdo není v místnosti a v případě odchodu písaře jsme
+použili k signalizaci metodu \texttt{broadcast-condition}, která
+probudí všechna čekající vlákna. Tady je to potřeba, jelikož v
+případě, že čeká více čtenářů, chceme probudit všechny a nemůžeme
+vědět, kolik jich na podmínce čeká.
+
+V tomto řešení mají stejně jako u prvního řešení se semafory přednost
+čtenáři. Abychom dali přednost písařům, je potřeba uspat všechny
+příchozí čtenáře, jakmile je před vchodem první písař a ten musí
+počkat než budou pryč všichni čtenáři. Jednoduchou úpravou metody
+\texttt{writer-enter} tohoto docílíme.
+
+\begin{verbatim}
+(define-monitor-method writer-enter ((rw read-write-lock))
+  (with-slots (writerp readers emptyp) rw
+    (loop :while writerp
+          :do (wait-on-condition emptyp))
+    (setf writerp t)
+    (loop :while (positivep readers)
+          :do (wait-on-condition emptyp)))
+  t)
+\end{verbatim}
+
+Jakmile přijde první písař, nastaví slot \texttt{writerp} na
+\texttt{t} a tím zajistí, že už žádní noví čtenáři neprojdou. Pak už
+stačí akorát počkat, než všichni místnost opustí.
+
+Zde by bylo ještě idiomatické přejmenovat podmíněnou proměnnou na
+\texttt{nowriterp} a přidat ještě navíc \texttt{noreaderp}. Nicméně
+řešení je funkční i takto.
+
+\printbibliography
+
+\end {document}
