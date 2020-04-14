@@ -100,9 +100,9 @@ Example:
 CONDVAR is signaled."
   (with-slots (condition-variable counter lock) condvar
     (bt:with-lock-held (lock)
-      (incf counter)
-      (bt:condition-wait condition-variable
-			 (slot-value monitor 'lock)))))
+      (incf counter))
+    (bt:condition-wait condition-variable
+		       (slot-value monitor 'lock))))
 
 (defmethod signal-condition ((condvar condition-variable))
   "Release a thread waiting on CONDVAR."
