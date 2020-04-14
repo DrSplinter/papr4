@@ -33,7 +33,7 @@
     :initform (semaphore 0))))
 
 (defmethod wait-on-barrier ((barrier counting-barrier) &key)
-  (with-slots (n count arrival departure) barrier
+  (with-slots (n count mutex arrival-turnstile departure-turnstile) barrier
     (critical-section mutex
       (incf count)
       (when (= count n)
