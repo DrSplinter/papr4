@@ -130,7 +130,7 @@ current thread."
 purpose only."
   (warn "Dangerous operation which can lead to inconsistent state. Use
   this with caution.")
-  (loop :for thread :in *all-threads*
+  (loop :for thread :in (all-threads pool)
      :for executor = (slot-value thread 'executor)
      :when (bt:thread-alive-p executor)
      :do (bt:destroy-thread executor)))
