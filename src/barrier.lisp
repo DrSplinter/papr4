@@ -28,7 +28,7 @@
    (mutex
     :initform (semaphore 1))
    (arrival-turnstile
-    :initform (semaphore 1))
+    :initform (semaphore 0))
    (departure-turnstile
     :initform (semaphore 0))))
 
