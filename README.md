@@ -10,6 +10,3 @@ at Palacky University Olomouc\.
 4. Load file `papr4-master/lispworks-load.lisp`
 5. Evaluate `(in-package :papr4/user)`
 6. Happy hacking!
-
-## Usage
-In progress. Please wait patiently.
